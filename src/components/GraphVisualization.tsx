@@ -32,8 +32,19 @@ export default function GraphVisualization({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<any>(null);
+
+  // Stable refs for callbacks so they don't trigger graph recreation
   const nodesRef = useRef(nodes);
   nodesRef.current = nodes;
+  const onNodeClickRef = useRef(onNodeClick);
+  onNodeClickRef.current = onNodeClick;
+  const onNodeExpandRef = useRef(onNodeExpand);
+  onNodeExpandRef.current = onNodeExpand;
+  const focusNodeIdRef = useRef(focusNodeId);
+  focusNodeIdRef.current = focusNodeId;
+
+  // Version counter to cancel stale async inits
+  const versionRef = useRef(0);
 
   const getFilteredData = useCallback(() => {
     let filteredEdges = edges.filter((e) => e.totalAmount >= minAmountFilter);
@@ -82,30 +93,45 @@ export default function GraphVisualization({
     return { nodes: filteredNodes, edges: filteredEdges };
   }, [nodes, edges, viewMode, rootAddresses, minAmountFilter, timeRange]);
 
-  // Focus on a specific node when focusNodeId changes
+  // Destroy graph and wipe the container DOM completely
+  const destroyGraph = useCallback(() => {
+    if (graphRef.current) {
+      try {
+        graphRef.current.destroy();
+      } catch {
+        // ignore
+      }
+      graphRef.current = null;
+    }
+    if (containerRef.current) {
+      containerRef.current.innerHTML = "";
+    }
+  }, []);
+
+  // Focus on a node — separate effect, does NOT rebuild the graph
   useEffect(() => {
     if (!focusNodeId || !graphRef.current) return;
     try {
-      graphRef.current.focusElement(focusNodeId, { animation: { duration: 600 } });
+      graphRef.current.focusElement(focusNodeId, {
+        animation: { duration: 500 },
+      });
     } catch {
-      // fallback: no-op if API differs
+      // ignore
     }
   }, [focusNodeId]);
 
+  // Main graph lifecycle
   useEffect(() => {
     if (!containerRef.current || nodes.length === 0) return;
 
-    let destroyed = false;
+    const version = ++versionRef.current;
+
+    destroyGraph();
 
     const init = async () => {
       const G6 = await import("@antv/g6");
 
-      if (destroyed) return;
-
-      if (graphRef.current) {
-        graphRef.current.destroy();
-        graphRef.current = null;
-      }
+      if (version !== versionRef.current || !containerRef.current) return;
 
       const { nodes: fNodes, edges: fEdges } = getFilteredData();
       if (fNodes.length === 0) return;
@@ -121,24 +147,27 @@ export default function GraphVisualization({
         return Math.max(24, Math.min(80, 24 + (vol / maxVolume) * 56));
       };
 
+      const hi = highlightIntersections;
+      const fid = focusNodeIdRef.current;
+
       const nodeColor = (n: GraphNodeData) => {
         if (n.isRoot) return "#06d6a0";
-        if (highlightIntersections && n.isIntersection) return "#f59e0b";
+        if (hi && n.isIntersection) return "#f59e0b";
         if (n.isExchange) return "#ef4444";
         return "#3b82f6";
       };
 
       const nodeStroke = (n: GraphNodeData) => {
-        if (n.id === focusNodeId) return "#ffffff";
+        if (n.id === fid) return "#ffffff";
         if (n.isRoot) return "#ffffff";
-        if (highlightIntersections && n.isIntersection) return "#fbbf24";
+        if (hi && n.isIntersection) return "#fbbf24";
         return "transparent";
       };
 
       const nodeLineWidth = (n: GraphNodeData) => {
-        if (n.id === focusNodeId) return 4;
+        if (n.id === fid) return 4;
         if (n.isRoot) return 3;
-        if (highlightIntersections && n.isIntersection) return 2;
+        if (hi && n.isIntersection) return 2;
         return 0;
       };
 
@@ -163,12 +192,13 @@ export default function GraphVisualization({
           isExchange: n.isExchange,
           isIntersection: n.isIntersection,
           exchangeName: n.exchangeName,
-          shadowColor: n.isIntersection && highlightIntersections
-            ? "rgba(245, 158, 11, 0.5)"
-            : n.isRoot
-              ? "rgba(6, 214, 160, 0.4)"
-              : "transparent",
-          shadowBlur: (n.isIntersection && highlightIntersections) || n.isRoot ? 20 : 0,
+          shadowColor:
+            n.isIntersection && hi
+              ? "rgba(245,158,11,0.5)"
+              : n.isRoot
+                ? "rgba(6,214,160,0.4)"
+                : "transparent",
+          shadowBlur: (n.isIntersection && hi) || n.isRoot ? 20 : 0,
         },
       }));
 
@@ -180,38 +210,48 @@ export default function GraphVisualization({
           width: edgeWidth(e),
           color: edgeColor(e),
           label: fmtAmt(e.totalAmount, e.token),
-          totalAmount: e.totalAmount,
-          token: e.token,
-          txCount: e.txCount,
         },
       }));
 
       const layoutCfg = (() => {
         switch (layoutType) {
           case "dagre":
-            return { type: "dagre" as const, rankdir: "LR", nodesep: 60, ranksep: 160 };
-          case "radial":
-            return { type: "radial" as const, unitRadius: 200, linkDistance: 250 };
-          default:
             return {
-              type: "force" as const,
+              type: "dagre" as const,
+              rankdir: "LR",
+              nodesep: 50,
+              ranksep: 120,
+            };
+          case "radial":
+            return {
+              type: "radial" as const,
+              unitRadius: 180,
+              linkDistance: 200,
               preventOverlap: true,
               nodeSize: 60,
-              linkDistance: 220,
-              nodeStrength: -800,
-              edgeStrength: 0.4,
+              maxPreventOverlapIteration: 500,
+            };
+          default:
+            return {
+              type: "d3-force" as const,
+              animated: false,
+              link: { distance: 180 },
+              charge: { strength: -200, distanceMax: 600 },
+              collide: { radius: 35, strength: 0.7 },
             };
         }
       })();
+
+      if (version !== versionRef.current) return;
 
       const rect = containerRef.current!.getBoundingClientRect();
 
       const graph = new G6.Graph({
         container: containerRef.current!,
-        width: rect.width,
-        height: rect.height,
+        width: rect.width || 800,
+        height: rect.height || 600,
         autoFit: "view",
-        padding: [60, 60, 60, 60],
+        padding: [50, 50, 50, 50],
         data: { nodes: g6Nodes, edges: g6Edges },
         node: {
           type: "circle",
@@ -225,7 +265,7 @@ export default function GraphVisualization({
             labelText: (d: any) => d.data?.label ?? "",
             labelFill: "#d1d5db",
             labelFontSize: 10,
-            labelFontFamily: "'SF Mono', 'Fira Code', monospace",
+            labelFontFamily: "'SF Mono','Fira Code',monospace",
             labelPlacement: "bottom",
             labelOffsetY: 4,
             cursor: "pointer",
@@ -249,52 +289,61 @@ export default function GraphVisualization({
         },
         layout: layoutCfg,
         behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
-        animation: true,
+        animation: false,
       });
 
       graph.on("node:click", (evt: any) => {
         const id = evt.target?.id;
         if (id) {
           const nd = nodesRef.current.find((n) => n.id === id);
-          if (nd && onNodeClick) onNodeClick(nd);
+          if (nd && onNodeClickRef.current) onNodeClickRef.current(nd);
         }
       });
 
       graph.on("node:dblclick", (evt: any) => {
         const id = evt.target?.id;
-        if (id && onNodeExpand) onNodeExpand(id);
+        if (id && onNodeExpandRef.current) onNodeExpandRef.current(id);
       });
 
-      await graph.render();
-      graphRef.current = graph;
-
-      if (focusNodeId) {
-        try {
-          graph.focusElement(focusNodeId, { animation: { duration: 600 } });
-        } catch { /* ignore */ }
+      if (version !== versionRef.current) {
+        graph.destroy();
+        return;
       }
+
+      await graph.render();
+
+      if (version !== versionRef.current) {
+        graph.destroy();
+        return;
+      }
+
+      graphRef.current = graph;
     };
 
     init().catch(console.error);
 
     return () => {
-      destroyed = true;
-      if (graphRef.current) {
-        graphRef.current.destroy();
-        graphRef.current = null;
-      }
+      versionRef.current++;
+      destroyGraph();
     };
-  }, [nodes, edges, viewMode, minAmountFilter, layoutType, rootAddresses, timeRange, highlightIntersections, focusNodeId, getFilteredData, onNodeClick, onNodeExpand]);
+    // Only rebuild when data/filters/layout actually change
+    // Callbacks are accessed via refs, focusNodeId has its own effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges, viewMode, minAmountFilter, layoutType, rootAddresses, timeRange, highlightIntersections, getFilteredData, destroyGraph]);
 
+  // Handle container resize
   useEffect(() => {
     if (!containerRef.current) return;
+    const el = containerRef.current;
     const ro = new ResizeObserver(() => {
-      if (graphRef.current && containerRef.current) {
-        const { width, height } = containerRef.current.getBoundingClientRect();
-        graphRef.current.resize(width, height);
+      if (graphRef.current && el) {
+        const { width, height } = el.getBoundingClientRect();
+        if (width > 0 && height > 0) {
+          graphRef.current.resize(width, height);
+        }
       }
     });
-    ro.observe(containerRef.current);
+    ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
