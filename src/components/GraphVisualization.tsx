@@ -45,6 +45,8 @@ export default function GraphVisualization({
 
   // Version counter to cancel stale async inits
   const versionRef = useRef(0);
+  const layoutTypeRef = useRef(layoutType);
+  layoutTypeRef.current = layoutType;
 
   const getFilteredData = useCallback(() => {
     let filteredEdges = edges.filter((e) => e.totalAmount >= minAmountFilter);
@@ -108,6 +110,35 @@ export default function GraphVisualization({
     }
   }, []);
 
+  const getLayoutConfig = useCallback((lt: string) => {
+    switch (lt) {
+      case "dagre":
+        return {
+          type: "dagre" as const,
+          rankdir: "LR",
+          nodesep: 50,
+          ranksep: 120,
+        };
+      case "radial":
+        return {
+          type: "radial" as const,
+          unitRadius: 250,
+          linkDistance: 250,
+          preventOverlap: true,
+          nodeSize: 40,
+          maxPreventOverlapIteration: 50,
+        };
+      default:
+        return {
+          type: "d3-force" as const,
+          animated: false,
+          link: { distance: 180 },
+          charge: { strength: -200, distanceMax: 600 },
+          collide: { radius: 35, strength: 0.7 },
+        };
+    }
+  }, []);
+
   // Focus on a node — separate effect, does NOT rebuild the graph
   useEffect(() => {
     if (!focusNodeId || !graphRef.current) return;
@@ -119,6 +150,18 @@ export default function GraphVisualization({
       // ignore
     }
   }, [focusNodeId]);
+
+  // Layout-only change — no rebuild
+  useEffect(() => {
+    const g = graphRef.current;
+    if (!g) return;
+    try {
+      g.setLayout(getLayoutConfig(layoutType));
+      g.layout();
+    } catch {
+      // ignore — will rebuild via main effect if needed
+    }
+  }, [layoutType, getLayoutConfig]);
 
   // Main graph lifecycle
   useEffect(() => {
@@ -213,34 +256,7 @@ export default function GraphVisualization({
         },
       }));
 
-      const layoutCfg = (() => {
-        switch (layoutType) {
-          case "dagre":
-            return {
-              type: "dagre" as const,
-              rankdir: "LR",
-              nodesep: 50,
-              ranksep: 120,
-            };
-          case "radial":
-            return {
-              type: "radial" as const,
-              unitRadius: 180,
-              linkDistance: 200,
-              preventOverlap: true,
-              nodeSize: 60,
-              maxPreventOverlapIteration: 500,
-            };
-          default:
-            return {
-              type: "d3-force" as const,
-              animated: false,
-              link: { distance: 180 },
-              charge: { strength: -200, distanceMax: 600 },
-              collide: { radius: 35, strength: 0.7 },
-            };
-        }
-      })();
+      const layoutCfg = getLayoutConfig(layoutTypeRef.current);
 
       if (version !== versionRef.current) return;
 
@@ -329,7 +345,9 @@ export default function GraphVisualization({
     // Only rebuild when data/filters/layout actually change
     // Callbacks are accessed via refs, focusNodeId has its own effect
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges, viewMode, minAmountFilter, layoutType, rootAddresses, timeRange, highlightIntersections, getFilteredData, destroyGraph]);
+  // layoutType is handled by its own effect via setLayout(), not here
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, edges, viewMode, minAmountFilter, rootAddresses, timeRange, highlightIntersections, getFilteredData, destroyGraph]);
 
   // Handle container resize
   useEffect(() => {
