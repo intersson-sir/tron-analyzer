@@ -191,10 +191,10 @@ export default function Home() {
       </header>
 
       {/* Controls */}
-      <div className="border-b border-gray-800 px-6 py-3 space-y-3 flex-shrink-0">
-        {/* Row 1: wallets + params */}
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[260px]">
+      <div className="border-b border-gray-800 flex-shrink-0">
+        {/* Row 1: Wallets */}
+        <div className="px-5 py-3 flex gap-3 items-end">
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
               Кошелёк 1
             </label>
@@ -203,10 +203,10 @@ export default function Home() {
               value={wallet1}
               onChange={(e) => setWallet1(e.target.value)}
               placeholder="T..."
-              className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm font-mono focus:border-accent focus:outline-none transition-colors"
+              className="w-full h-9 bg-gray-900 border border-gray-700 rounded-md px-3 text-sm font-mono focus:border-accent focus:outline-none transition-colors"
             />
           </div>
-          <div className="flex-1 min-w-[260px]">
+          <div className="flex-1 min-w-[200px]">
             <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
               Кошелёк 2
             </label>
@@ -215,139 +215,115 @@ export default function Home() {
               value={wallet2}
               onChange={(e) => setWallet2(e.target.value)}
               placeholder="T..."
-              className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm font-mono focus:border-accent focus:outline-none transition-colors"
+              className="w-full h-9 bg-gray-900 border border-gray-700 rounded-md px-3 text-sm font-mono focus:border-accent focus:outline-none transition-colors"
             />
           </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-              Глубина
-            </label>
+
+          <div className="w-px h-9 bg-gray-800" />
+
+          <Ctl label="Глубина">
             <select
               value={depth}
               onChange={(e) => setDepth(Number(e.target.value))}
-              className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm focus:border-accent focus:outline-none"
+              className="h-9 bg-gray-900 border border-gray-700 rounded-md px-2.5 text-sm focus:border-accent focus:outline-none"
             >
               {[1, 2, 3, 4, 5].map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
+                <option key={d} value={d}>{d}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-              Макс. узлов
-            </label>
+          </Ctl>
+          <Ctl label="Макс. узлов">
             <select
               value={maxNodes}
               onChange={(e) => setMaxNodes(Number(e.target.value))}
-              className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm focus:border-accent focus:outline-none"
+              className="h-9 bg-gray-900 border border-gray-700 rounded-md px-2.5 text-sm focus:border-accent focus:outline-none"
             >
               {[50, 100, 150, 200, 300, 500].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
+                <option key={n} value={n}>{n}</option>
               ))}
             </select>
-          </div>
-          <div>
-            <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-              Мин. сумма
-            </label>
+          </Ctl>
+          <Ctl label="Мин. сумма">
             <input
-              type="number"
-              value={minAmount}
-              onChange={(e) => setMinAmount(Number(e.target.value))}
+              type="text"
+              inputMode="decimal"
+              value={minAmount || ""}
+              onChange={(e) => setMinAmount(Number(e.target.value) || 0)}
               placeholder="0"
-              className="w-24 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm focus:border-accent focus:outline-none"
+              className="h-9 w-[88px] bg-gray-900 border border-gray-700 rounded-md px-3 text-sm tabular-nums focus:border-accent focus:outline-none"
             />
-          </div>
+          </Ctl>
+
           <button
             onClick={handleAnalyze}
             disabled={loading}
-            className="bg-accent text-gray-900 font-semibold px-8 py-2 rounded hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm"
+            className="h-9 bg-accent text-gray-900 font-semibold px-6 rounded-md hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm whitespace-nowrap"
           >
             {loading ? "Анализ…" : "Анализировать"}
           </button>
         </div>
 
-        {/* Row 2: filters + view controls */}
+        {/* Row 2: Toolbar — appears after analysis */}
         {result && (
-          <div className="flex flex-wrap gap-3 items-center">
-            <BtnGroup
-              label="Вид"
-              value={viewMode}
-              options={[
-                { value: "combined", label: "Общий" },
-                { value: "wallet1", label: "Кошелёк 1" },
-                { value: "wallet2", label: "Кошелёк 2" },
-              ]}
-              onChange={(v) =>
-                setViewMode(v as "combined" | "wallet1" | "wallet2")
-              }
-            />
-            <BtnGroup
-              label="Раскладка"
-              value={layoutType}
-              options={[
-                { value: "force", label: "Force" },
-                { value: "dagre", label: "Dagre" },
-                { value: "radial", label: "Radial" },
-              ]}
-              onChange={(v) =>
-                setLayoutType(v as "force" | "dagre" | "radial")
-              }
-            />
-
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-gray-500">
-                Фильтр ≥
-              </span>
-              <input
-                type="number"
-                value={minAmountFilter}
-                onChange={(e) => setMinAmountFilter(Number(e.target.value))}
-                className="w-24 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs focus:border-accent focus:outline-none"
+          <div className="px-5 py-2 border-t border-gray-800/60 space-y-2 text-xs">
+            {/* Toolbar line 1: view + layout + filter + intersections */}
+            <div className="flex items-center gap-2.5">
+              <BtnGroup
+                value={viewMode}
+                options={[
+                  { value: "combined", label: "Общий" },
+                  { value: "wallet1", label: "W1" },
+                  { value: "wallet2", label: "W2" },
+                ]}
+                onChange={(v) =>
+                  setViewMode(v as "combined" | "wallet1" | "wallet2")
+                }
               />
+              <Sep />
+              <BtnGroup
+                value={layoutType}
+                options={[
+                  { value: "force", label: "Force" },
+                  { value: "dagre", label: "Dagre" },
+                  { value: "radial", label: "Radial" },
+                ]}
+                onChange={(v) =>
+                  setLayoutType(v as "force" | "dagre" | "radial")
+                }
+              />
+              <Sep />
+              <span className="text-gray-500">≥</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={minAmountFilter || ""}
+                onChange={(e) => setMinAmountFilter(Number(e.target.value) || 0)}
+                placeholder="0"
+                className="h-7 w-16 bg-gray-900 border border-gray-700 rounded px-2 text-xs tabular-nums focus:border-accent focus:outline-none"
+              />
+              <Sep />
+              <button
+                onClick={() => setHighlightIntersections(!highlightIntersections)}
+                className={`flex items-center gap-1.5 h-7 px-2.5 rounded border transition-colors ${
+                  highlightIntersections
+                    ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                    : "bg-gray-900 text-gray-500 border-gray-700"
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                Пересечения
+                {result.metadata.intersectionCount > 0 && (
+                  <span className="bg-amber-500/25 text-amber-300 px-1.5 rounded-full text-[10px] font-semibold leading-none py-0.5">
+                    {result.metadata.intersectionCount}
+                  </span>
+                )}
+              </button>
             </div>
 
-            {/* Legend */}
-            <div className="flex items-center gap-3 ml-auto text-xs text-gray-400">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#06d6a0]" />
-                Исходный
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" />
-                Пересечение
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" />
-                Биржа
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]" />
-                Кошелёк
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-0.5 bg-[#ff0013]" /> TRX
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-0.5 bg-[#26a17b]" /> USDT
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Row 3: search + time range + intersection toggle */}
-        {result && (
-          <div className="flex flex-wrap gap-3 items-center">
-            {/* Search */}
-            <div className="relative">
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] uppercase tracking-wider text-gray-500">
-                  Поиск
-                </span>
+            {/* Toolbar line 2: search + time range */}
+            <div className="flex items-center gap-2.5">
+              {/* Search */}
+              <div className="relative">
                 <input
                   type="text"
                   value={searchQuery}
@@ -359,146 +335,110 @@ export default function Home() {
                     if (e.key === "Enter" && searchResults.length > 0) {
                       handleSearch(searchResults[0].id);
                     }
+                    if (e.key === "Escape") setSearchQuery("");
                   }}
-                  placeholder="Адрес или название…"
-                  className="w-56 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs font-mono focus:border-accent focus:outline-none"
+                  placeholder="🔍  Поиск адреса…"
+                  className="h-7 w-52 bg-gray-900 border border-gray-700 rounded px-2 text-xs font-mono focus:border-accent focus:outline-none placeholder:text-gray-600 placeholder:font-sans"
                 />
+                {searchQuery.trim() && searchResults.length > 0 && (
+                  <div className="absolute top-full left-0 mt-1 w-72 bg-[#141a26] border border-gray-700 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto">
+                    {searchResults.map((node) => (
+                      <button
+                        key={node.id}
+                        onClick={() => handleSearch(node.id)}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-gray-800/60 transition-colors flex items-center gap-2 border-b border-gray-800/50 last:border-0"
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{
+                            background: node.isRoot
+                              ? "#06d6a0"
+                              : node.isIntersection
+                                ? "#f59e0b"
+                                : node.isExchange
+                                  ? "#ef4444"
+                                  : "#3b82f6",
+                          }}
+                        />
+                        <span className="font-mono truncate">{node.id}</span>
+                        {node.exchangeName && (
+                          <span className="text-red-400 text-[10px] flex-shrink-0">
+                            {node.exchangeName}
+                          </span>
+                        )}
+                        {node.isIntersection && (
+                          <span className="text-amber-400 text-[10px] flex-shrink-0">∩</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {searchQuery.trim() && searchResults.length === 0 && (
+                  <div className="absolute top-full left-0 mt-1 w-60 bg-[#141a26] border border-gray-700 rounded-lg shadow-2xl z-50 px-3 py-2 text-xs text-gray-500">
+                    Не найдено
+                  </div>
+                )}
               </div>
-              {searchQuery.trim() && searchResults.length > 0 && (
-                <div className="absolute top-full left-0 mt-1 w-72 bg-gray-900 border border-gray-700 rounded shadow-xl z-50 max-h-60 overflow-y-auto">
-                  {searchResults.map((node) => (
-                    <button
-                      key={node.id}
-                      onClick={() => handleSearch(node.id)}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-gray-800 transition-colors flex items-center gap-2 border-b border-gray-800 last:border-0"
-                    >
-                      <span
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{
-                          background: node.isRoot
-                            ? "#06d6a0"
-                            : node.isIntersection
-                              ? "#f59e0b"
-                              : node.isExchange
-                                ? "#ef4444"
-                                : "#3b82f6",
-                        }}
-                      />
-                      <span className="font-mono truncate">{node.id}</span>
-                      {node.exchangeName && (
-                        <span className="text-red-400 text-[10px] flex-shrink-0">
-                          {node.exchangeName}
-                        </span>
-                      )}
-                      {node.isIntersection && (
-                        <span className="text-amber-400 text-[10px] flex-shrink-0">
-                          ∩
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {searchQuery.trim() && searchResults.length === 0 && (
-                <div className="absolute top-full left-0 mt-1 w-72 bg-gray-900 border border-gray-700 rounded shadow-xl z-50 px-3 py-2 text-xs text-gray-500">
-                  Не найдено
-                </div>
-              )}
-            </div>
 
-            {/* Separator */}
-            <div className="w-px h-5 bg-gray-700" />
+              <Sep />
 
-            {/* Time range */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] uppercase tracking-wider text-gray-500">
-                Период
-              </span>
+              {/* Time range */}
+              <span className="text-gray-500">Период</span>
               <input
                 type="date"
                 value={timeFrom}
                 min={timeRangeBounds?.min}
                 max={timeRangeBounds?.max}
                 onChange={(e) => setTimeFrom(e.target.value)}
-                className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs focus:border-accent focus:outline-none [color-scheme:dark]"
+                className="h-7 bg-gray-900 border border-gray-700 rounded px-1.5 text-xs focus:border-accent focus:outline-none [color-scheme:dark]"
               />
-              <span className="text-gray-600 text-xs">—</span>
+              <span className="text-gray-700">—</span>
               <input
                 type="date"
                 value={timeTo}
                 min={timeRangeBounds?.min}
                 max={timeRangeBounds?.max}
                 onChange={(e) => setTimeTo(e.target.value)}
-                className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs focus:border-accent focus:outline-none [color-scheme:dark]"
+                className="h-7 bg-gray-900 border border-gray-700 rounded px-1.5 text-xs focus:border-accent focus:outline-none [color-scheme:dark]"
               />
               {(timeFrom || timeTo) && (
                 <button
-                  onClick={() => {
-                    setTimeFrom("");
-                    setTimeTo("");
-                  }}
-                  className="text-gray-500 hover:text-gray-300 text-xs"
-                  title="Сбросить период"
+                  onClick={() => { setTimeFrom(""); setTimeTo(""); }}
+                  className="text-gray-500 hover:text-gray-300 text-[10px]"
                 >
                   ✕
                 </button>
               )}
             </div>
-
-            {/* Separator */}
-            <div className="w-px h-5 bg-gray-700" />
-
-            {/* Intersection toggle */}
-            <button
-              onClick={() => setHighlightIntersections(!highlightIntersections)}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded border transition-colors ${
-                highlightIntersections
-                  ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
-                  : "bg-gray-900 text-gray-500 border-gray-700"
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-              Пересечения
-              {result.metadata.intersectionCount > 0 && (
-                <span className="bg-amber-500/30 text-amber-300 px-1.5 rounded-full text-[10px] font-semibold">
-                  {result.metadata.intersectionCount}
-                </span>
-              )}
-            </button>
           </div>
         )}
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="mx-6 mt-3 p-3 bg-red-900/30 border border-red-800 rounded text-red-400 text-sm flex-shrink-0">
-          {error}
-        </div>
-      )}
-
-      {/* Intersection summary banner */}
+      {/* Intersection bar — thin, non-intrusive */}
       {result && result.metadata.intersectionCount > 0 && highlightIntersections && (
-        <div className="mx-6 mt-3 p-3 bg-amber-900/20 border border-amber-700/40 rounded text-amber-300 text-sm flex-shrink-0 flex items-center gap-3">
-          <span className="text-amber-400 text-lg">⚡</span>
-          <div>
-            <span className="font-semibold">
-              {result.metadata.intersectionCount} общих адресов
-            </span>{" "}
-            найдено между кошельками.{" "}
-            <span className="text-amber-400/70">
-              Оба кошелька взаимодействовали с этими адресами.
-            </span>
-          </div>
+        <div className="px-5 py-1.5 bg-amber-950/30 border-b border-amber-900/30 flex items-center gap-2 text-xs text-amber-400/90 flex-shrink-0">
+          <span>⚡</span>
+          <span>
+            <span className="font-medium">{result.metadata.intersectionCount} общих адресов</span>
+            {" "}между кошельками
+          </span>
           <button
             onClick={() => {
               if (intersectionNodes.length > 0) {
                 handleSearch(intersectionNodes[0].id);
               }
             }}
-            className="ml-auto text-xs bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1 rounded transition-colors whitespace-nowrap"
+            className="ml-2 underline underline-offset-2 decoration-amber-600/50 hover:decoration-amber-400 transition-colors"
           >
-            Показать первый →
+            показать →
           </button>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="mx-5 mt-2 px-3 py-2 bg-red-900/20 border border-red-800/40 rounded-md text-red-400 text-xs flex-shrink-0">
+          {error}
         </div>
       )}
 
@@ -570,8 +510,15 @@ export default function Home() {
               {progress && (
                 <span className="text-accent">{progress}</span>
               )}
-              <span className="ml-auto text-gray-600">
-                Клик — детали · Двойной клик — раскрыть
+              <span className="ml-auto flex items-center gap-3 text-gray-600">
+                <LegendDot color="#06d6a0" label="Исходный" />
+                <LegendDot color="#f59e0b" label="∩" />
+                <LegendDot color="#ef4444" label="Биржа" />
+                <LegendDot color="#3b82f6" label="Кошелёк" />
+                <span className="flex items-center gap-1"><span className="w-2 h-[2px] bg-[#ff0013] rounded-full" />TRX</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-[2px] bg-[#26a17b] rounded-full" />USDT</span>
+                <span className="text-gray-700">·</span>
+                Клик — детали · 2× — раскрыть
               </span>
             </div>
           )}
@@ -795,36 +742,53 @@ function StatCard({
 }
 
 function BtnGroup({
-  label,
   value,
   options,
   onChange,
 }: {
-  label: string;
   value: string;
   options: { value: string; label: string }[];
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[10px] uppercase tracking-wider text-gray-500">
-        {label}
-      </span>
-      <div className="flex">
-        {options.map((o) => (
-          <button
-            key={o.value}
-            onClick={() => onChange(o.value)}
-            className={`px-3 py-1 text-xs first:rounded-l last:rounded-r border transition-colors ${
-              value === o.value
-                ? "bg-accent text-gray-900 border-accent"
-                : "bg-gray-900 text-gray-400 border-gray-700 hover:text-gray-200"
-            }`}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
+    <div className="flex">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          onClick={() => onChange(o.value)}
+          className={`h-7 px-2.5 text-xs first:rounded-l last:rounded-r border transition-colors ${
+            value === o.value
+              ? "bg-accent text-gray-900 border-accent font-medium"
+              : "bg-gray-900 text-gray-400 border-gray-700 hover:text-gray-200"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
+  );
+}
+
+function Sep() {
+  return <div className="w-px h-5 bg-gray-800" />;
+}
+
+function Ctl({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
   );
 }
