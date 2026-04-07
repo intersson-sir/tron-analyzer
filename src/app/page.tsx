@@ -20,11 +20,6 @@ const DEFAULT_W1 = "TQmjBcRzpEqsgkwz5qNSmXRLwdDJfex4mn";
 const DEFAULT_W2 = "TQT1zgatvHraUmy7YUy74HnR9H6riL9Fg4";
 
 export default function Home() {
-  const [wallet1, setWallet1] = useState(DEFAULT_W1);
-  const [wallet2, setWallet2] = useState(DEFAULT_W2);
-  const [depth, setDepth] = useState(2);
-  const [minAmount, setMinAmount] = useState(0);
-  const [maxNodes, setMaxNodes] = useState(150);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -78,12 +73,7 @@ export default function Home() {
       .slice(0, 8);
   }, [result, searchQuery]);
 
-  const handleAnalyze = useCallback(async () => {
-    if (!wallet1.trim() || !wallet2.trim()) {
-      setError("Введите оба адреса кошельков");
-      return;
-    }
-
+  const loadSnapshot = useCallback(async () => {
     setLoading(true);
     setError(null);
     setResult(null);
@@ -92,19 +82,10 @@ export default function Home() {
     setTimeFrom("");
     setTimeTo("");
     setSearchQuery("");
-    setProgress("Запрашиваем транзакции…");
+    setProgress("Загружаем данные…");
 
     try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          addresses: [wallet1.trim(), wallet2.trim()],
-          depth,
-          minAmount,
-          maxNodes,
-        }),
-      });
+      const res = await fetch("/api/snapshot");
 
       if (!res.ok) {
         const d = await res.json();
@@ -120,10 +101,10 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [wallet1, wallet2, depth, minAmount, maxNodes]);
+  }, []);
 
   useEffect(() => {
-    handleAnalyze();
+    loadSnapshot();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -197,75 +178,24 @@ export default function Home() {
 
       {/* Controls */}
       <div className="border-b border-gray-800 flex-shrink-0">
-        {/* Row 1: Wallets */}
-        <div className="px-5 py-3 flex gap-3 items-end">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-              Кошелёк 1
-            </label>
-            <input
-              type="text"
-              value={wallet1}
-              onChange={(e) => setWallet1(e.target.value)}
-              placeholder="T..."
-              className="w-full h-9 bg-gray-900 border border-gray-700 rounded-md px-3 text-sm font-mono focus:border-accent focus:outline-none transition-colors"
-            />
+        {/* Wallet info bar */}
+        <div className="px-5 py-2.5 flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#06d6a0] flex-shrink-0" />
+            <span className="text-gray-500 uppercase tracking-wider text-[10px]">W1</span>
+            <span className="font-mono text-gray-300 select-all">{DEFAULT_W1}</span>
           </div>
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-              Кошелёк 2
-            </label>
-            <input
-              type="text"
-              value={wallet2}
-              onChange={(e) => setWallet2(e.target.value)}
-              placeholder="T..."
-              className="w-full h-9 bg-gray-900 border border-gray-700 rounded-md px-3 text-sm font-mono focus:border-accent focus:outline-none transition-colors"
-            />
+          <div className="w-px h-4 bg-gray-800" />
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#06d6a0] flex-shrink-0" />
+            <span className="text-gray-500 uppercase tracking-wider text-[10px]">W2</span>
+            <span className="font-mono text-gray-300 select-all">{DEFAULT_W2}</span>
           </div>
-
-          <div className="w-px h-9 bg-gray-800" />
-
-          <Ctl label="Глубина">
-            <select
-              value={depth}
-              onChange={(e) => setDepth(Number(e.target.value))}
-              className="h-9 bg-gray-900 border border-gray-700 rounded-md px-2.5 text-sm focus:border-accent focus:outline-none"
-            >
-              {[1, 2, 3, 4, 5].map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-          </Ctl>
-          <Ctl label="Макс. узлов">
-            <select
-              value={maxNodes}
-              onChange={(e) => setMaxNodes(Number(e.target.value))}
-              className="h-9 bg-gray-900 border border-gray-700 rounded-md px-2.5 text-sm focus:border-accent focus:outline-none"
-            >
-              {[50, 100, 150, 200, 300, 500].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </Ctl>
-          <Ctl label="Мин. сумма">
-            <input
-              type="text"
-              inputMode="decimal"
-              value={minAmount || ""}
-              onChange={(e) => setMinAmount(Number(e.target.value) || 0)}
-              placeholder="0"
-              className="h-9 w-[88px] bg-gray-900 border border-gray-700 rounded-md px-3 text-sm tabular-nums focus:border-accent focus:outline-none"
-            />
-          </Ctl>
-
-          <button
-            onClick={handleAnalyze}
-            disabled={loading}
-            className="h-9 bg-accent text-gray-900 font-semibold px-6 rounded-md hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm whitespace-nowrap"
-          >
-            {loading ? "Анализ…" : "Анализировать"}
-          </button>
+          {result && typeof (result.metadata as Record<string, unknown>).syncedAt === "number" && (
+            <span className="ml-auto text-gray-600">
+              Снапшот: {new Date((result.metadata as Record<string, unknown>).syncedAt as number).toLocaleString("ru")}
+            </span>
+          )}
         </div>
 
         {/* Row 2: Toolbar — appears after analysis */}
@@ -456,10 +386,7 @@ export default function Home() {
               <div className="text-center">
                 <div className="animate-spin w-10 h-10 border-2 border-accent border-t-transparent rounded-full mx-auto mb-3" />
                 <p className="text-gray-400 text-sm">
-                  {progress || "Анализируем транзакции…"}
-                </p>
-                <p className="text-xs text-gray-600 mt-1">
-                  Это может занять до минуты
+                  {progress || "Загружаем граф…"}
                 </p>
               </div>
             </div>
@@ -472,7 +399,7 @@ export default function Home() {
               onNodeClick={setSelectedNode}
               onNodeExpand={handleNodeExpand}
               viewMode={viewMode}
-              rootAddresses={[wallet1.trim(), wallet2.trim()]}
+              rootAddresses={[DEFAULT_W1, DEFAULT_W2]}
               minAmountFilter={minAmountFilter}
               layoutType={layoutType}
               timeRange={timeRange}
@@ -483,13 +410,9 @@ export default function Home() {
             <div className="flex items-center justify-center h-full text-gray-600">
               <div className="text-center max-w-md">
                 <div className="text-5xl mb-4 opacity-30">◈</div>
-                <p className="text-base mb-2">
-                  Введите адреса кошельков и нажмите
-                  &quot;Анализировать&quot;
-                </p>
+                <p className="text-base mb-2">Загружаем граф транзакций…</p>
                 <p className="text-sm text-gray-700">
-                  Граф транзакций появится здесь. Клик по узлу — детали.
-                  Двойной клик — раскрыть связи.
+                  Граф появится через несколько секунд.
                 </p>
               </div>
             </div>
@@ -523,7 +446,7 @@ export default function Home() {
                 <span className="flex items-center gap-1"><span className="w-2 h-[2px] bg-[#ff0013] rounded-full" />TRX</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-[2px] bg-[#26a17b] rounded-full" />USDT</span>
                 <span className="text-gray-700">·</span>
-                Клик — детали · 2× — раскрыть
+                Клик — детали
               </span>
             </div>
           )}
@@ -673,12 +596,6 @@ export default function Home() {
                 </div>
               </div>
 
-              <button
-                onClick={() => handleNodeExpand(selectedNode.id)}
-                className="w-full mt-4 bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2.5 rounded text-sm transition-colors"
-              >
-                Раскрыть узел →
-              </button>
             </div>
           </aside>
         )}
