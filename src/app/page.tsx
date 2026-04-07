@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { GraphNodeData, GraphEdgeData, AnalysisResult } from "@/types";
 
@@ -37,6 +37,46 @@ export default function Home() {
     "force",
   );
   const [minAmountFilter, setMinAmountFilter] = useState(0);
+  const [highlightIntersections, setHighlightIntersections] = useState(true);
+  const [timeFrom, setTimeFrom] = useState<string>("");
+  const [timeTo, setTimeTo] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+
+  const timeRange = useMemo<[number, number] | null>(() => {
+    if (!timeFrom && !timeTo) return null;
+    const from = timeFrom ? new Date(timeFrom).getTime() : 0;
+    const to = timeTo ? new Date(timeTo + "T23:59:59").getTime() : Date.now();
+    return [from, to];
+  }, [timeFrom, timeTo]);
+
+  const timeRangeBounds = useMemo(() => {
+    if (!result) return null;
+    const { min, max } = result.metadata.timeRange;
+    if (!min || !max) return null;
+    return {
+      min: new Date(min).toISOString().split("T")[0],
+      max: new Date(max).toISOString().split("T")[0],
+    };
+  }, [result]);
+
+  const intersectionNodes = useMemo(() => {
+    if (!result) return [];
+    return result.nodes.filter((n) => n.isIntersection);
+  }, [result]);
+
+  const searchResults = useMemo(() => {
+    if (!result || !searchQuery.trim()) return [];
+    const q = searchQuery.trim().toLowerCase();
+    return result.nodes
+      .filter(
+        (n) =>
+          n.id.toLowerCase().includes(q) ||
+          (n.exchangeName && n.exchangeName.toLowerCase().includes(q)) ||
+          n.label.toLowerCase().includes(q),
+      )
+      .slice(0, 8);
+  }, [result, searchQuery]);
 
   const handleAnalyze = useCallback(async () => {
     if (!wallet1.trim() || !wallet2.trim()) {
@@ -48,6 +88,10 @@ export default function Home() {
     setError(null);
     setResult(null);
     setSelectedNode(null);
+    setFocusNodeId(null);
+    setTimeFrom("");
+    setTimeTo("");
+    setSearchQuery("");
     setProgress("Запрашиваем транзакции…");
 
     try {
@@ -123,6 +167,16 @@ export default function Home() {
     [result, minAmountFilter],
   );
 
+  const handleSearch = useCallback(
+    (nodeId: string) => {
+      setFocusNodeId(nodeId);
+      setSearchQuery("");
+      const node = result?.nodes.find((n) => n.id === nodeId);
+      if (node) setSelectedNode(node);
+    },
+    [result],
+  );
+
   return (
     <div className="min-h-screen bg-[#0a0e17] text-gray-100 flex flex-col">
       {/* Header */}
@@ -138,6 +192,7 @@ export default function Home() {
 
       {/* Controls */}
       <div className="border-b border-gray-800 px-6 py-3 space-y-3 flex-shrink-0">
+        {/* Row 1: wallets + params */}
         <div className="flex flex-wrap gap-3 items-end">
           <div className="flex-1 min-w-[260px]">
             <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
@@ -216,7 +271,7 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Second row */}
+        {/* Row 2: filters + view controls */}
         {result && (
           <div className="flex flex-wrap gap-3 items-center">
             <BtnGroup
@@ -257,10 +312,14 @@ export default function Home() {
             </div>
 
             {/* Legend */}
-            <div className="flex items-center gap-4 ml-auto text-xs text-gray-400">
+            <div className="flex items-center gap-3 ml-auto text-xs text-gray-400">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#06d6a0]" />
                 Исходный
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]" />
+                Пересечение
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" />
@@ -276,10 +335,136 @@ export default function Home() {
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-0.5 bg-[#26a17b]" /> USDT
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-0.5 bg-[#a855f7]" /> Other
-              </span>
             </div>
+          </div>
+        )}
+
+        {/* Row 3: search + time range + intersection toggle */}
+        {result && (
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Search */}
+            <div className="relative">
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                  Поиск
+                </span>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setFocusNodeId(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && searchResults.length > 0) {
+                      handleSearch(searchResults[0].id);
+                    }
+                  }}
+                  placeholder="Адрес или название…"
+                  className="w-56 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs font-mono focus:border-accent focus:outline-none"
+                />
+              </div>
+              {searchQuery.trim() && searchResults.length > 0 && (
+                <div className="absolute top-full left-0 mt-1 w-72 bg-gray-900 border border-gray-700 rounded shadow-xl z-50 max-h-60 overflow-y-auto">
+                  {searchResults.map((node) => (
+                    <button
+                      key={node.id}
+                      onClick={() => handleSearch(node.id)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-gray-800 transition-colors flex items-center gap-2 border-b border-gray-800 last:border-0"
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{
+                          background: node.isRoot
+                            ? "#06d6a0"
+                            : node.isIntersection
+                              ? "#f59e0b"
+                              : node.isExchange
+                                ? "#ef4444"
+                                : "#3b82f6",
+                        }}
+                      />
+                      <span className="font-mono truncate">{node.id}</span>
+                      {node.exchangeName && (
+                        <span className="text-red-400 text-[10px] flex-shrink-0">
+                          {node.exchangeName}
+                        </span>
+                      )}
+                      {node.isIntersection && (
+                        <span className="text-amber-400 text-[10px] flex-shrink-0">
+                          ∩
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searchQuery.trim() && searchResults.length === 0 && (
+                <div className="absolute top-full left-0 mt-1 w-72 bg-gray-900 border border-gray-700 rounded shadow-xl z-50 px-3 py-2 text-xs text-gray-500">
+                  Не найдено
+                </div>
+              )}
+            </div>
+
+            {/* Separator */}
+            <div className="w-px h-5 bg-gray-700" />
+
+            {/* Time range */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-gray-500">
+                Период
+              </span>
+              <input
+                type="date"
+                value={timeFrom}
+                min={timeRangeBounds?.min}
+                max={timeRangeBounds?.max}
+                onChange={(e) => setTimeFrom(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs focus:border-accent focus:outline-none [color-scheme:dark]"
+              />
+              <span className="text-gray-600 text-xs">—</span>
+              <input
+                type="date"
+                value={timeTo}
+                min={timeRangeBounds?.min}
+                max={timeRangeBounds?.max}
+                onChange={(e) => setTimeTo(e.target.value)}
+                className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs focus:border-accent focus:outline-none [color-scheme:dark]"
+              />
+              {(timeFrom || timeTo) && (
+                <button
+                  onClick={() => {
+                    setTimeFrom("");
+                    setTimeTo("");
+                  }}
+                  className="text-gray-500 hover:text-gray-300 text-xs"
+                  title="Сбросить период"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Separator */}
+            <div className="w-px h-5 bg-gray-700" />
+
+            {/* Intersection toggle */}
+            <button
+              onClick={() => setHighlightIntersections(!highlightIntersections)}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded border transition-colors ${
+                highlightIntersections
+                  ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                  : "bg-gray-900 text-gray-500 border-gray-700"
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              Пересечения
+              {result.metadata.intersectionCount > 0 && (
+                <span className="bg-amber-500/30 text-amber-300 px-1.5 rounded-full text-[10px] font-semibold">
+                  {result.metadata.intersectionCount}
+                </span>
+              )}
+            </button>
           </div>
         )}
       </div>
@@ -291,6 +476,32 @@ export default function Home() {
         </div>
       )}
 
+      {/* Intersection summary banner */}
+      {result && result.metadata.intersectionCount > 0 && highlightIntersections && (
+        <div className="mx-6 mt-3 p-3 bg-amber-900/20 border border-amber-700/40 rounded text-amber-300 text-sm flex-shrink-0 flex items-center gap-3">
+          <span className="text-amber-400 text-lg">⚡</span>
+          <div>
+            <span className="font-semibold">
+              {result.metadata.intersectionCount} общих адресов
+            </span>{" "}
+            найдено между кошельками.{" "}
+            <span className="text-amber-400/70">
+              Оба кошелька взаимодействовали с этими адресами.
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              if (intersectionNodes.length > 0) {
+                handleSearch(intersectionNodes[0].id);
+              }
+            }}
+            className="ml-auto text-xs bg-amber-500/20 hover:bg-amber-500/30 px-3 py-1 rounded transition-colors whitespace-nowrap"
+          >
+            Показать первый →
+          </button>
+        </div>
+      )}
+
       {/* Main content */}
       <div className="flex flex-1 min-h-0">
         {/* Graph */}
@@ -299,7 +510,9 @@ export default function Home() {
             <div className="absolute inset-0 flex items-center justify-center bg-[#0a0e17]/80 z-10">
               <div className="text-center">
                 <div className="animate-spin w-10 h-10 border-2 border-accent border-t-transparent rounded-full mx-auto mb-3" />
-                <p className="text-gray-400 text-sm">{progress || "Анализируем транзакции…"}</p>
+                <p className="text-gray-400 text-sm">
+                  {progress || "Анализируем транзакции…"}
+                </p>
                 <p className="text-xs text-gray-600 mt-1">
                   Это может занять до минуты
                 </p>
@@ -317,13 +530,17 @@ export default function Home() {
               rootAddresses={[wallet1.trim(), wallet2.trim()]}
               minAmountFilter={minAmountFilter}
               layoutType={layoutType}
+              timeRange={timeRange}
+              focusNodeId={focusNodeId}
+              highlightIntersections={highlightIntersections}
             />
           ) : !loading ? (
             <div className="flex items-center justify-center h-full text-gray-600">
               <div className="text-center max-w-md">
                 <div className="text-5xl mb-4 opacity-30">◈</div>
                 <p className="text-base mb-2">
-                  Введите адреса кошельков и нажмите &quot;Анализировать&quot;
+                  Введите адреса кошельков и нажмите
+                  &quot;Анализировать&quot;
                 </p>
                 <p className="text-sm text-gray-700">
                   Граф транзакций появится здесь. Клик по узлу — детали.
@@ -340,9 +557,14 @@ export default function Home() {
               <span>{result.edges.length} связей</span>
               <span>Глубина: {result.metadata.maxDepthReached}</span>
               <span>Транзакций: {result.metadata.totalTransactions}</span>
+              {result.metadata.intersectionCount > 0 && (
+                <span className="text-amber-400">
+                  ⚡ {result.metadata.intersectionCount} пересечений
+                </span>
+              )}
               {result.metadata.truncated && (
                 <span className="text-yellow-500">
-                  ⚠ Результат обрезан (лимит узлов)
+                  ⚠ Результат обрезан
                 </span>
               )}
               {progress && (
@@ -390,10 +612,20 @@ export default function Home() {
                 {selectedNode.isRoot && (
                   <Tag color="accent">Исходный кошелёк</Tag>
                 )}
+                {selectedNode.isIntersection && (
+                  <Tag color="amber">Пересечение</Tag>
+                )}
                 {selectedNode.isExchange && (
                   <Tag color="red">{selectedNode.exchangeName}</Tag>
                 )}
               </div>
+
+              {/* Intersection explanation */}
+              {selectedNode.isIntersection && (
+                <div className="mb-4 p-2 bg-amber-900/20 border border-amber-700/30 rounded text-[11px] text-amber-300/80">
+                  Оба исследуемых кошелька имеют связь с этим адресом
+                </div>
+              )}
 
               {/* Stats grid */}
               <div className="grid grid-cols-2 gap-2 mb-4">
@@ -448,7 +680,10 @@ export default function Home() {
                             const node = result!.nodes.find(
                               (n) => n.id === other,
                             );
-                            if (node) setSelectedNode(node);
+                            if (node) {
+                              setSelectedNode(node);
+                              setFocusNodeId(node.id);
+                            }
                           }}
                         >
                           <div className="flex items-center gap-1 mb-0.5">
@@ -465,6 +700,11 @@ export default function Home() {
                             {otherNode?.isExchange && (
                               <span className="text-red-400 text-[10px]">
                                 [{otherNode.exchangeName}]
+                              </span>
+                            )}
+                            {otherNode?.isIntersection && (
+                              <span className="text-amber-400 text-[10px]">
+                                ∩
                               </span>
                             )}
                           </div>
@@ -525,7 +765,9 @@ function Tag({
   const cls =
     color === "red"
       ? "bg-red-500/20 text-red-400"
-      : "bg-accent/20 text-accent";
+      : color === "amber"
+        ? "bg-amber-500/20 text-amber-400"
+        : "bg-accent/20 text-accent";
   return (
     <span className={`px-2 py-0.5 text-[10px] rounded font-medium ${cls}`}>
       {children}

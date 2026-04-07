@@ -29,6 +29,7 @@ function ensureNode(
     isExchange: isExchangeAddress(addr),
     exchangeName: getExchangeLabel(addr),
     isRoot: rootAddresses.includes(addr),
+    isIntersection: false,
     depth,
     totalReceived: 0,
     totalSent: 0,
@@ -47,6 +48,8 @@ function addEdge(
     existing.totalAmount += tx.amount;
     existing.txCount++;
     existing.avgAmount = existing.totalAmount / existing.txCount;
+    existing.minTimestamp = Math.min(existing.minTimestamp, tx.timestamp);
+    existing.maxTimestamp = Math.max(existing.maxTimestamp, tx.timestamp);
     if (existing.transactions.length < 50) {
       existing.transactions.push(tx);
     }
@@ -59,9 +62,58 @@ function addEdge(
       token: tx.token,
       txCount: 1,
       avgAmount: tx.amount,
+      minTimestamp: tx.timestamp,
+      maxTimestamp: tx.timestamp,
       transactions: [tx],
     });
   }
+}
+
+function computeIntersections(
+  nodesMap: Map<string, GraphNodeData>,
+  edgesMap: Map<string, GraphEdgeData>,
+  rootAddresses: string[],
+): number {
+  if (rootAddresses.length < 2) return 0;
+
+  const adj = new Map<string, Set<string>>();
+  for (const node of nodesMap.keys()) {
+    adj.set(node, new Set());
+  }
+  for (const edge of edgesMap.values()) {
+    adj.get(edge.source)?.add(edge.target);
+    adj.get(edge.target)?.add(edge.source);
+  }
+
+  const bfs = (start: string): Set<string> => {
+    const visited = new Set<string>();
+    const queue = [start];
+    visited.add(start);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      for (const neighbor of adj.get(current) || []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
+      }
+    }
+    return visited;
+  };
+
+  const reachableFrom0 = bfs(rootAddresses[0]);
+  const reachableFrom1 = bfs(rootAddresses[1]);
+
+  let count = 0;
+  for (const [addr, node] of nodesMap) {
+    if (node.isRoot) continue;
+    if (reachableFrom0.has(addr) && reachableFrom1.has(addr)) {
+      node.isIntersection = true;
+      count++;
+    }
+  }
+
+  return count;
 }
 
 export async function analyzeWallets(
@@ -139,13 +191,26 @@ export async function analyzeWallets(
     frontier = nextFrontier.slice(0, Math.max(10, maxNodes - nodesMap.size));
   }
 
+  const intersectionCount = computeIntersections(nodesMap, edgesMap, rootAddresses);
+
+  const edges = Array.from(edgesMap.values());
+  let minTs = Infinity;
+  let maxTs = 0;
+  for (const e of edges) {
+    if (e.minTimestamp && e.minTimestamp < minTs) minTs = e.minTimestamp;
+    if (e.maxTimestamp && e.maxTimestamp > maxTs) maxTs = e.maxTimestamp;
+  }
+  if (!isFinite(minTs)) minTs = 0;
+
   return {
     nodes: Array.from(nodesMap.values()),
-    edges: Array.from(edgesMap.values()),
+    edges,
     metadata: {
       totalTransactions: totalTxCount,
       maxDepthReached: depthReached,
       truncated,
+      timeRange: { min: minTs, max: maxTs },
+      intersectionCount,
     },
   };
 }
@@ -176,6 +241,7 @@ export async function expandNode(
           isExchange: isExchangeAddress(other),
           exchangeName: getExchangeLabel(other),
           isRoot: false,
+          isIntersection: false,
           depth: -1,
           totalReceived: tx.to === other ? tx.amount : 0,
           totalSent: tx.from === other ? tx.amount : 0,

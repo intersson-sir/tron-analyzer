@@ -15,6 +15,7 @@ export interface GraphNodeData {
   isExchange: boolean;
   exchangeName?: string;
   isRoot: boolean;
+  isIntersection: boolean;
   depth: number;
   totalReceived: number;
   totalSent: number;
@@ -29,6 +30,8 @@ export interface GraphEdgeData {
   token: string;
   txCount: number;
   avgAmount: number;
+  minTimestamp: number;
+  maxTimestamp: number;
   transactions: TronTransaction[];
 }
 
@@ -39,5 +42,7 @@ export interface AnalysisResult {
     totalTransactions: number;
     maxDepthReached: number;
     truncated: boolean;
+    timeRange: { min: number; max: number };
+    intersectionCount: number;
   };
 }

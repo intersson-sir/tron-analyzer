@@ -12,6 +12,9 @@ interface Props {
   rootAddresses: string[];
   minAmountFilter: number;
   layoutType: "force" | "dagre" | "radial";
+  timeRange: [number, number] | null;
+  focusNodeId: string | null;
+  highlightIntersections: boolean;
 }
 
 export default function GraphVisualization({
@@ -23,16 +26,24 @@ export default function GraphVisualization({
   rootAddresses,
   minAmountFilter,
   layoutType,
+  timeRange,
+  focusNodeId,
+  highlightIntersections,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<any>(null);
   const nodesRef = useRef(nodes);
-  const edgesRef = useRef(edges);
   nodesRef.current = nodes;
-  edgesRef.current = edges;
 
   const getFilteredData = useCallback(() => {
     let filteredEdges = edges.filter((e) => e.totalAmount >= minAmountFilter);
+
+    if (timeRange) {
+      const [tMin, tMax] = timeRange;
+      filteredEdges = filteredEdges.filter(
+        (e) => e.maxTimestamp >= tMin && e.minTimestamp <= tMax,
+      );
+    }
 
     if (viewMode !== "combined" && rootAddresses.length === 2) {
       const rootAddr = rootAddresses[viewMode === "wallet1" ? 0 : 1];
@@ -69,7 +80,17 @@ export default function GraphVisualization({
 
     const filteredNodes = nodes.filter((n) => nodeIds.has(n.id));
     return { nodes: filteredNodes, edges: filteredEdges };
-  }, [nodes, edges, viewMode, rootAddresses, minAmountFilter]);
+  }, [nodes, edges, viewMode, rootAddresses, minAmountFilter, timeRange]);
+
+  // Focus on a specific node when focusNodeId changes
+  useEffect(() => {
+    if (!focusNodeId || !graphRef.current) return;
+    try {
+      graphRef.current.focusElement(focusNodeId, { animation: { duration: 600 } });
+    } catch {
+      // fallback: no-op if API differs
+    }
+  }, [focusNodeId]);
 
   useEffect(() => {
     if (!containerRef.current || nodes.length === 0) return;
@@ -102,8 +123,23 @@ export default function GraphVisualization({
 
       const nodeColor = (n: GraphNodeData) => {
         if (n.isRoot) return "#06d6a0";
+        if (highlightIntersections && n.isIntersection) return "#f59e0b";
         if (n.isExchange) return "#ef4444";
         return "#3b82f6";
+      };
+
+      const nodeStroke = (n: GraphNodeData) => {
+        if (n.id === focusNodeId) return "#ffffff";
+        if (n.isRoot) return "#ffffff";
+        if (highlightIntersections && n.isIntersection) return "#fbbf24";
+        return "transparent";
+      };
+
+      const nodeLineWidth = (n: GraphNodeData) => {
+        if (n.id === focusNodeId) return 4;
+        if (n.isRoot) return 3;
+        if (highlightIntersections && n.isIntersection) return 2;
+        return 0;
       };
 
       const edgeWidth = (e: GraphEdgeData) =>
@@ -120,10 +156,19 @@ export default function GraphVisualization({
         data: {
           size: nodeSize(n),
           color: nodeColor(n),
+          stroke: nodeStroke(n),
+          lineWidth: nodeLineWidth(n),
           label: n.label,
           isRoot: n.isRoot,
           isExchange: n.isExchange,
+          isIntersection: n.isIntersection,
           exchangeName: n.exchangeName,
+          shadowColor: n.isIntersection && highlightIntersections
+            ? "rgba(245, 158, 11, 0.5)"
+            : n.isRoot
+              ? "rgba(6, 214, 160, 0.4)"
+              : "transparent",
+          shadowBlur: (n.isIntersection && highlightIntersections) || n.isRoot ? 20 : 0,
         },
       }));
 
@@ -173,8 +218,10 @@ export default function GraphVisualization({
           style: {
             size: (d: any) => d.data?.size ?? 30,
             fill: (d: any) => d.data?.color ?? "#3b82f6",
-            stroke: (d: any) => (d.data?.isRoot ? "#ffffff" : "transparent"),
-            lineWidth: (d: any) => (d.data?.isRoot ? 3 : 0),
+            stroke: (d: any) => d.data?.stroke ?? "transparent",
+            lineWidth: (d: any) => d.data?.lineWidth ?? 0,
+            shadowColor: (d: any) => d.data?.shadowColor ?? "transparent",
+            shadowBlur: (d: any) => d.data?.shadowBlur ?? 0,
             labelText: (d: any) => d.data?.label ?? "",
             labelFill: "#d1d5db",
             labelFontSize: 10,
@@ -220,6 +267,12 @@ export default function GraphVisualization({
 
       await graph.render();
       graphRef.current = graph;
+
+      if (focusNodeId) {
+        try {
+          graph.focusElement(focusNodeId, { animation: { duration: 600 } });
+        } catch { /* ignore */ }
+      }
     };
 
     init().catch(console.error);
@@ -231,7 +284,7 @@ export default function GraphVisualization({
         graphRef.current = null;
       }
     };
-  }, [nodes, edges, viewMode, minAmountFilter, layoutType, rootAddresses, getFilteredData, onNodeClick, onNodeExpand]);
+  }, [nodes, edges, viewMode, minAmountFilter, layoutType, rootAddresses, timeRange, highlightIntersections, focusNodeId, getFilteredData, onNodeClick, onNodeExpand]);
 
   useEffect(() => {
     if (!containerRef.current) return;
