@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import type { GraphNodeData, GraphEdgeData, AnalysisResult } from "@/types";
 
@@ -121,6 +121,11 @@ export default function Home() {
       setLoading(false);
     }
   }, [wallet1, wallet2, depth, minAmount, maxNodes]);
+
+  useEffect(() => {
+    handleAnalyze();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleNodeExpand = useCallback(
     async (nodeId: string) => {
